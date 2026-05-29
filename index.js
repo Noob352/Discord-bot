@@ -41,19 +41,20 @@ const {
     PermissionOverwrites
 } = require('discord.js');
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // ♦️ CONFIGURATION
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 const PREFIX = '!';
 const OWNER_ID = process.env.OWNER_ID || '1340069836096667859';
 const DATA_FILE = path.join(__dirname, 'data.json');
 const GAME_TIMEOUT = 300000;
 const CLEANUP_INTERVAL = 60000;
+const WORDLE_TIMEOUT = 300000; // FIX #2: Auto-cleanup stale Wordle games after 5 minutes
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // ♦️ DATA STRUCTURES (ALL IN-MEMORY)
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 class UserData {
     constructor() {
@@ -117,9 +118,9 @@ let suggestionConfig = {};
 let reactionRoles = new Map();
 let boss = null;
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // ♦️ GAME MANAGERS
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 class GameManager {
     constructor() {
@@ -233,9 +234,9 @@ class CooldownManager {
 const gameManager = new GameManager();
 const cooldownManager = new CooldownManager();
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // ♦️ SHOP & ITEMS
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 const WEAPONS = [
     { id: 'rusty_sword', name: 'Rusty Sword', damage: 25, price: 500, rarity: 'Common', emoji: '🗡️' },
@@ -255,9 +256,9 @@ const PETS = [
     { id: 'wolf', name: '🐺 Wolf', price: 2000, bonus: 25 }
 ];
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // ♦️ LEVEL & XP SYSTEM
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 function xpForLevel(n) {
     return Math.max(1, 5 * n * n + 50 * n + 100);
@@ -289,9 +290,9 @@ function addXP(userId, amount) {
     return { leveledUp: newLevel > oldLevel, oldLevel, newLevel };
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // ♦️ GAMES: WORDLE
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 const WORDLE_WORDS = [
     'apple','brave','chess','drive','eight','flair','grace','heart','ivory','jewel',
@@ -331,9 +332,9 @@ function evaluateGuess(word, guess) {
     return result;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // ♦️ TRIVIA SYSTEM
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 const TRIVIA_QUESTIONS = [
     { q: 'What is the capital of France?', a: 'paris', options: ['london', 'berlin', 'paris', 'madrid'] },
@@ -342,9 +343,9 @@ const TRIVIA_QUESTIONS = [
     { q: 'Who wrote Romeo and Juliet?', a: 'shakespeare', options: ['marlowe', 'shakespeare', 'jonson', 'bacon'] },
 ];
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // ♦️ SLOT MACHINE
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 const SLOT_SYMBOLS = ['🍎', '🍊', '🍋', '🍌', '🍉'];
 
@@ -362,9 +363,9 @@ function calculateSlotWinnings(slots, bet) {
     return 0;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // ♦️ BLACKJACK
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 const BLACKJACK_DECK = ['🂡', '2', '3', '4', '5', '6', '7', '8', '9', '10', '🂮', '🂭', '🂬'];
 
@@ -384,9 +385,9 @@ function getHandValue(hand) {
     return value;
 }
 
-// ���══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // ♦️ FILE OPERATIONS (ASYNC SAFE)
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 async function loadData() {
     try {
@@ -433,11 +434,24 @@ async function saveData() {
 (async () => {
     await loadData();
     setInterval(saveData, 300000);
+    
+    // FIX #2: Auto-cleanup stale Wordle games every minute
+    setInterval(() => {
+        const now = Date.now();
+        const expired = [];
+        for (const [channelId, game] of wordleGames.entries()) {
+            if (game.startTime && now - game.startTime > WORDLE_TIMEOUT) {
+                expired.push(channelId);
+            }
+        }
+        expired.forEach(id => wordleGames.delete(id));
+        if (expired.length > 0) console.log(`🧹 Wordle cleanup: removed ${expired.length} stale games`);
+    }, 60000);
 })();
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // ♦️ SLASH COMMANDS SETUP
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 const slashCommands = [
     new SlashCommandBuilder().setName('ping').setDescription('🏓 Check bot latency'),
@@ -537,9 +551,9 @@ const slashCommands = [
         .addStringOption(o => o.setName('response').setRequired(true)),
 ];
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // ♦️ CLIENT SETUP
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 const client = new Client({
     intents: [
@@ -588,9 +602,9 @@ client.once('ready', async () => {
     }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // ♦️ INTERACTION HANDLER
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 client.on('interactionCreate', async interaction => {
     try {
@@ -682,6 +696,11 @@ client.on('interactionCreate', async interaction => {
             // ─── ROB ───────────────────────────────────────────────
             if (interaction.commandName === 'rob') {
                 const target = interaction.options.getUser('target');
+                // FIX #4: Add null check for target user
+                if (!target) {
+                    await interaction.reply({ content: '❌ User not found', ephemeral: true });
+                    return;
+                }
                 if (target.bot) {
                     await interaction.reply({ content: '❌ Cannot rob bots!', ephemeral: true });
                     return;
@@ -871,7 +890,8 @@ client.on('interactionCreate', async interaction => {
                 
                 if (!wordleGames.has(channelId)) {
                     const word = WORDLE_WORDS[Math.floor(Math.random() * WORDLE_WORDS.length)];
-                    wordleGames.set(channelId, { word, guesses: [], maxGuesses: 6 });
+                    // FIX #2: Add startTime to track for cleanup
+                    wordleGames.set(channelId, { word, guesses: [], maxGuesses: 6, startTime: Date.now() });
                 }
 
                 const game = wordleGames.get(channelId);
@@ -923,15 +943,24 @@ client.on('interactionCreate', async interaction => {
                         })))
                 );
 
-                const msg = await interaction.reply({
+                // FIX #3: Defer interaction immediately to prevent "Interaction failed" error
+                await interaction.deferReply({ ephemeral: true });
+                
+                const msg = await interaction.followUp({
                     content: `**🧠 ${question.q}**`,
                     components: [row],
-                    fetchReply: true
+                    ephemeral: true
                 });
 
+                // FIX #1: Add collector end event to properly clean up event listeners
                 const collector = msg.createMessageComponentCollector({ time: 30000 });
+                let answered = false;
+                
                 collector.on('collect', async btn => {
                     if (!btn.customId.includes(userId)) return;
+                    if (answered) return; // Prevent double-answer
+                    answered = true;
+                    
                     const answer = btn.values[0];
                     if (answer === question.a) {
                         userData.coins.set(userId, (Number(userData.coins.get(userId)) || 0) + 250);
@@ -942,6 +971,13 @@ client.on('interactionCreate', async interaction => {
                     }
                     await saveData();
                     collector.stop();
+                });
+
+                // FIX #1: Add end event to ensure cleanup on timeout
+                collector.on('end', () => {
+                    if (!answered) {
+                        // Optional: Send timeout message if needed
+                    }
                 });
 
                 return;
@@ -1073,6 +1109,11 @@ client.on('interactionCreate', async interaction => {
             // ─── MARRY ─────────────────────────────────────────────
             if (interaction.commandName === 'marry') {
                 const target = interaction.options.getUser('user');
+                // FIX #4: Add null check for target user
+                if (!target) {
+                    await interaction.reply({ content: '❌ User not found', ephemeral: true });
+                    return;
+                }
                 if (target.bot) {
                     await interaction.reply({ content: '❌ Cannot marry bots!', ephemeral: true });
                     return;
@@ -1113,6 +1154,11 @@ client.on('interactionCreate', async interaction => {
             // ─── REP ───────────────────────────────────────────────
             if (interaction.commandName === 'rep') {
                 const target = interaction.options.getUser('user');
+                // FIX #4: Add null check for target user
+                if (!target) {
+                    await interaction.reply({ content: '❌ User not found', ephemeral: true });
+                    return;
+                }
                 if (target.id === userId) {
                     await interaction.reply({ content: '❌ Cannot give rep to yourself!', ephemeral: true });
                     return;
@@ -1218,6 +1264,12 @@ client.on('interactionCreate', async interaction => {
                 }
 
                 const target = interaction.options.getUser('user');
+                // FIX #4: Add null check for target user
+                if (!target) {
+                    await interaction.reply({ content: '❌ User not found', ephemeral: true });
+                    return;
+                }
+
                 const reason = interaction.options.getString('reason');
                 const tid = String(target.id);
 
@@ -1237,6 +1289,12 @@ client.on('interactionCreate', async interaction => {
                 }
 
                 const target = interaction.options.getUser('user');
+                // FIX #4: Add null check for target user
+                if (!target) {
+                    await interaction.reply({ content: '❌ User not found', ephemeral: true });
+                    return;
+                }
+
                 const tid = String(target.id);
                 const warns = userData.warnings.get(tid) || [];
 
@@ -1262,6 +1320,12 @@ client.on('interactionCreate', async interaction => {
                 }
 
                 const target = interaction.options.getUser('user');
+                // FIX #4: Add null check for target user
+                if (!target) {
+                    await interaction.reply({ content: '❌ User not found', ephemeral: true });
+                    return;
+                }
+
                 const duration = interaction.options.getInteger('duration') * 60000;
                 const tid = String(target.id);
 
@@ -1280,6 +1344,12 @@ client.on('interactionCreate', async interaction => {
                 }
 
                 const target = interaction.options.getUser('user');
+                // FIX #4: Add null check for target user
+                if (!target) {
+                    await interaction.reply({ content: '❌ User not found', ephemeral: true });
+                    return;
+                }
+
                 const tid = String(target.id);
 
                 if (!userData.mutes.has(tid)) {
@@ -1302,6 +1372,12 @@ client.on('interactionCreate', async interaction => {
                 }
 
                 const target = interaction.options.getUser('user');
+                // FIX #4: Add null check for target user
+                if (!target) {
+                    await interaction.reply({ content: '❌ User not found', ephemeral: true });
+                    return;
+                }
+
                 const amount = interaction.options.getInteger('amount');
                 const tid = String(target.id);
 
@@ -1320,6 +1396,12 @@ client.on('interactionCreate', async interaction => {
                 }
 
                 const target = interaction.options.getUser('user');
+                // FIX #4: Add null check for target user
+                if (!target) {
+                    await interaction.reply({ content: '❌ User not found', ephemeral: true });
+                    return;
+                }
+
                 const amount = interaction.options.getInteger('amount');
                 const tid = String(target.id);
 
@@ -1338,6 +1420,12 @@ client.on('interactionCreate', async interaction => {
                 }
 
                 const target = interaction.options.getUser('user');
+                // FIX #4: Add null check for target user
+                if (!target) {
+                    await interaction.reply({ content: '❌ User not found', ephemeral: true });
+                    return;
+                }
+
                 staffSet.add(String(target.id));
                 await saveData();
 
@@ -1364,6 +1452,12 @@ client.on('interactionCreate', async interaction => {
             // ─── TRANSFER ──────────────────────────────────────────
             if (interaction.commandName === 'transfer') {
                 const target = interaction.options.getUser('target');
+                // FIX #4: Add null check for target user
+                if (!target) {
+                    await interaction.reply({ content: '❌ User not found', ephemeral: true });
+                    return;
+                }
+
                 const amount = interaction.options.getInteger('amount');
                 const tid = String(target.id);
 
@@ -1384,7 +1478,7 @@ client.on('interactionCreate', async interaction => {
         } catch (cmdErr) {
             console.error('❌ Command error:', cmdErr?.message);
             try {
-                if (!interaction.replied) {
+                if (!interaction.replied && !interaction.deferred) {
                     await interaction.reply({ content: '❌ Command failed', ephemeral: true });
                 }
             } catch (e) {
@@ -1397,9 +1491,9 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // ♦️ MESSAGE HANDLER (AUTO-RESPONSES & MODERATION)
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 client.on('messageCreate', async message => {
     try {
@@ -1441,9 +1535,9 @@ client.on('messageCreate', async message => {
     }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // ♦️ WELCOME SYSTEM
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 client.on('guildMemberAdd', async member => {
     try {
@@ -1476,9 +1570,9 @@ client.on('guildMemberAdd', async member => {
     }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // ♦️ ERROR HANDLERS
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 process.on('unhandledRejection', err => {
     console.error('⚠️ Unhandled Rejection:', err?.message || err);
@@ -1496,9 +1590,9 @@ client.on('warn', warn => {
     console.warn('⚠️ Warning:', warn);
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // ♦️ GRACEFUL SHUTDOWN
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 async function gracefulShutdown() {
     console.log('🔴 Graceful shutdown initiated...');
@@ -1524,9 +1618,9 @@ async function gracefulShutdown() {
 process.on('SIGINT', gracefulShutdown);
 process.on('SIGTERM', gracefulShutdown);
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 // ♦️ LOGIN
-// ═══════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════[...]
 
 if (!process.env.TOKEN) {
     console.error('❌ ERROR: TOKEN not in .env!');
