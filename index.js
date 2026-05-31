@@ -626,6 +626,8 @@ const slashCommands = [
     new SlashCommandBuilder().setName('addresponse').setDescription('🤖 Add an auto-response (owner)')
         .addStringOption(o => o.setName('trigger').setDescription('Trigger word/phrase').setRequired(true))
         .addStringOption(o => o.setName('response').setDescription('Response text').setRequired(true)),
+    new SlashCommandBuilder().setName('deleteresponse').setDescription('🗑️ Delete an auto-response (owner)')
+    .addStringOption(o => o.setName('trigger').setDescription('Trigger word/phrase to delete').setRequired(true)),
 ];
 
 // ════════════════════════════════════════════════════════════════
@@ -975,15 +977,17 @@ client.on('interactionCreate', async interaction => {
                 return;
             }
 
-            // ─── LEADERBOARD ───────────────────────────────────────
-            if (interaction.commandName === 'leaderboard') {
-                const top = [...userData.coins.entries()]
-                    .sort((a, b) => (Number(b[1]) || 0) - (Number(a[1]) || 0))
-                    .slice(0, 10)
-                    .map(([id, amt], i) => `**#${i + 1}** <@${id}> — 💰 **${Number(amt).toLocaleString()}**`)
-                    .join('\n');
-                await interaction.reply({ content: `**🏆 Top 10 Richest Players**\n\n${top || 'No players yet'}` });
-                return;
+            
+            // ─── LEADERBOARD ───────────────────────────────────────────
+if (interaction.commandName === 'leaderboard') {
+    const top = [...userData.coins.entries()]
+        .sort((a, b) => (Number(b[1]) || 0) - (Number(a[1]) || 0))
+        .slice(0, 10)
+        .map(([id, amt], i) => `**#${i + 1}** <@${id}> — 💰 **${Number(amt).toLocaleString()}**`)
+        .join('\n');
+    await interaction.reply({ content: `**🏆 Top 10 Richest Players**\n\n${top || 'No players yet'}`, allowedMentions: { parse: [] } });
+    return;
+}
             }
 
             // ─── WORDLE ────────────────────────────────────────────
@@ -1608,28 +1612,66 @@ client.on('interactionCreate', async interaction => {
                 return;
             }
 
-            // ─── ADDRESPONSE (OWNER) ───────────────────────────────
-            if (interaction.commandName === 'addresponse') {
-                if (!await ownerOnly(interaction, isOwner)) return;
-                const trigger  = String(interaction.options.getString('trigger')).toLowerCase();
-                const response = String(interaction.options.getString('response'));
-                autoResponses.set(trigger, response);
-                await saveData();
-                await interaction.reply({ content: `✅ Auto-response added: **"${trigger}"** → "${response}"`, ephemeral: true });
+            client.on('interactionCreate', async (interaction) => {
+    try {
+
+        // ... other command handlers ...
+
+        // ─── ADDRESPONSE (OWNER) ───────────────────────────────
+        if (interaction.commandName === 'addresponse') {
+            if (!await ownerOnly(interaction, isOwner)) return;
+
+            const trigger = String(interaction.options.getString('trigger')).toLowerCase();
+            const response = String(interaction.options.getString('response'));
+
+            autoResponses.set(trigger, response);
+            await saveData();
+
+            await interaction.reply({
+                content: `✅ Auto-response added: **"${trigger}"** → "${response}"`,
+                ephemeral: true
+            });
+            return;
+        }
+
+        // ─── DELETERESPONSE (OWNER) ────────────────────────────
+        if (interaction.commandName === 'deleteresponse') {
+            if (!await ownerOnly(interaction, isOwner)) return;
+
+            const trigger = String(interaction.options.getString('trigger')).toLowerCase();
+
+            if (!autoResponses.has(trigger)) {
+                await interaction.reply({
+                    content: `❌ Auto-response **"${trigger}"** not found!`,
+                    ephemeral: true
+                });
                 return;
             }
 
-        } catch (cmdErr) {
-            console.error('❌ Command error:', cmdErr?.message, cmdErr?.stack);
-            try {
-                if (!interaction.replied && !interaction.deferred) {
-                    await interaction.reply({ content: '❌ Something went wrong. Try again!', ephemeral: true });
-                }
-            } catch (e) { console.error('Failed to reply after error:', e?.message); }
+            autoResponses.delete(trigger);
+            await saveData();
+
+            await interaction.reply({
+                content: `✅ Deleted auto-response: **"${trigger}"**`,
+                ephemeral: true
+            });
+            return;
         }
 
-    } catch (mainErr) {
-        console.error('❌ Interaction handler error:', mainErr?.message);
+    } catch (cmdErr) {
+        console.error('❌ Command error:', cmdErr?.message, cmdErr?.stack);
+
+        try {
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({
+                    content: '❌ Something went wrong. Try again!',
+                    ephemeral: true
+                });
+            }
+        } catch (e) {
+            console.error('Failed to reply after error:', e?.message);
+        }
+
     }
 });
 
